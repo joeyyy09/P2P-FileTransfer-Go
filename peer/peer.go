@@ -17,7 +17,6 @@ type Peer struct {
 	transport   Transport         // Transport layer for network communication
 	sharedDir   string           // Directory for shared files
 	receivedDir string           // Directory for received files
-	peers       map[string]string // Map of peer IDs to their addresses
 }
 
 // Transport defines the interface for network communication
@@ -53,7 +52,6 @@ func New(id, listenAddr, sharedDir, receivedDir string, transport Transport) (*P
 		transport:   transport,
 		sharedDir:   sharedDir,
 		receivedDir: receivedDir,
-		peers:       make(map[string]string),
 	}, nil
 }
 

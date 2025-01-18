@@ -1,4 +1,4 @@
-package pkg
+ package transport
 
 import (
 	"fmt"
@@ -20,7 +20,6 @@ type TCPTransport struct {
 	mu         sync.RWMutex    // Mutex for thread-safe operations
 	peers      map[string]net.Conn // Active peer connections
 	decoder    protocol.Decoder
-	encoder    protocol.Encoder
 }
 
 // NewTCPTransport creates and initializes a new TCPTransport instance
@@ -32,7 +31,6 @@ func NewTCPTransport(listenAddr string) *TCPTransport {
 		messageCh:  make(chan protocol.Message, 1024),
 		peers:      make(map[string]net.Conn),
 		decoder:    protocol.NewGobDecoder(),
-		encoder:    protocol.NewGobEncoder(),
 	}
 }
 
@@ -139,39 +137,6 @@ func (t *TCPTransport) Shutdown() error {
 	
 	close(t.messageCh)
 	return nil
-}
-
-// TCPPeer represents a connected peer in the network
-type TCPPeer struct {
-	conn    net.Conn
-	encoder protocol.Encoder
-}
-
-// NewTCPPeer creates a new TCPPeer instance
-func NewTCPPeer(conn net.Conn) *TCPPeer {
-	return &TCPPeer{
-		conn:    conn,
-		encoder: protocol.NewGobEncoder(),
-	}
-}
-
-// SendMessage sends data to the peer
-// payload: The data to send
-// Returns an error if the send operation fails
-func (p *TCPPeer) SendMessage(payload []byte, msgType uint8) error {
-	msg := &protocol.Message{
-		Type:    msgType,
-		Payload: payload,
-	}
-	return p.encoder.Encode(p.conn, msg)
-}
-
-func (p *TCPPeer) Send(payload []byte) error {
-	msg := &protocol.Message{
-		Type:    protocol.MessageTypeNormal,
-		Payload: payload,
-	}
-	return p.encoder.Encode(p.conn, msg)
 }
 
 // Add this method to TCPTransport

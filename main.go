@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"joeyyy09/P2P-FileTransfer-Go/peer"
-	"joeyyy09/P2P-FileTransfer-Go/pkg"
+	"joeyyy09/P2P-FileTransfer-Go/pkg/transport"
 )
 
 func main() {
@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Create and start peer
-	transport := pkg.NewTCPTransport("localhost:" + *port)
+	transport := transport.NewTCPTransport("localhost:" + *port)
 	p, err := peer.New(*peerID, "localhost:"+*port, *sharedDir, *receivedDir, transport)
 	if err != nil {
 		log.Fatal(err)
