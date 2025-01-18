@@ -1,10 +1,12 @@
 package pkg
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"joeyyy09/P2P-FileTransfer-Go/pkg/protocol"
 )
@@ -16,7 +18,7 @@ type TCPTransport struct {
 	listener   net.Listener    // TCP listener instance
 	messageCh  chan protocol.Message    // Channel for incoming messages
 	mu         sync.RWMutex    // Mutex for thread-safe operations
-	peers      map[net.Addr]net.Conn // Active peer connections
+	peers      map[string]net.Conn // Active peer connections
 	decoder    protocol.Decoder
 	encoder    protocol.Encoder
 }
@@ -28,7 +30,7 @@ func NewTCPTransport(listenAddr string) *TCPTransport {
 	return &TCPTransport{
 		listenAddr: listenAddr,
 		messageCh:  make(chan protocol.Message, 1024),
-		peers:      make(map[net.Addr]net.Conn),
+		peers:      make(map[string]net.Conn),
 		decoder:    protocol.NewGobDecoder(),
 		encoder:    protocol.NewGobEncoder(),
 	}
@@ -71,13 +73,15 @@ func (t *TCPTransport) handleIncomingConnections() {
 func (t *TCPTransport) managePeerConnection(conn net.Conn) {
 	defer conn.Close()
 	
+	log.Printf("New peer connection established from %s", conn.RemoteAddr())
+	
 	t.mu.Lock()
-	t.peers[conn.RemoteAddr()] = conn
+	t.peers[conn.RemoteAddr().String()] = conn
 	t.mu.Unlock()
 
 	defer func() {
 		t.mu.Lock()
-		delete(t.peers, conn.RemoteAddr())
+		delete(t.peers, conn.RemoteAddr().String())
 		t.mu.Unlock()
 	}()
 
@@ -100,15 +104,17 @@ func (t *TCPTransport) managePeerConnection(conn net.Conn) {
 // addr: The address of the remote peer to connect to
 // Returns an error if the connection fails
 func (t *TCPTransport) ConnectToPeer(addr string) error {
+	log.Printf("Connecting to peer at %s", addr)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("dial failed: %v", err)
 	}
 
 	t.mu.Lock()
-	t.peers[conn.RemoteAddr()] = conn
+	t.peers[addr] = conn
 	t.mu.Unlock()
 
+	log.Printf("Connected to peer at %s", addr)
 	go t.managePeerConnection(conn)
 	return nil
 }
@@ -166,5 +172,33 @@ func (p *TCPPeer) Send(payload []byte) error {
 		Payload: payload,
 	}
 	return p.encoder.Encode(p.conn, msg)
+}
+
+// Add this method to TCPTransport
+func (t *TCPTransport) Send(addr string, msg protocol.Message) error {
+	t.mu.Lock()
+	conn, exists := t.peers[addr]
+	t.mu.Unlock()
+
+	if !exists {
+		// Connect first
+		if err := t.ConnectToPeer(addr); err != nil {
+			return fmt.Errorf("failed to connect to peer %s: %v", addr, err)
+		}
+		// Wait a bit for connection to be established
+		time.Sleep(100 * time.Millisecond)
+		
+		// Get the connection
+		t.mu.Lock()
+		conn = t.peers[addr]
+		t.mu.Unlock()
+		
+		if conn == nil {
+			return fmt.Errorf("failed to establish connection with %s", addr)
+		}
+	}
+
+	encoder := protocol.NewGobEncoder()
+	return encoder.Encode(conn, &msg)
 }
 
